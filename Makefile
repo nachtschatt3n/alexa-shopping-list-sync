@@ -24,7 +24,8 @@ test:
 	.venv/bin/pytest -q -m "not integration"
 
 test-int:
-	.venv/bin/pytest -q -m integration
+	@if [ ! -f .env ]; then echo "ERROR: copy .env.example to .env and fill in ALEXA_EMAIL/ALEXA_PASSWORD"; exit 1; fi
+	@set -a && . ./.env && set +a && .venv/bin/pytest -q -m integration
 
 test-cov:
 	.venv/bin/pytest --cov --cov-report=term-missing -m "not integration"

@@ -39,6 +39,10 @@ It exposes the standard todo services — `todo.add_item`, `todo.update_item`, `
 |-------------|-------------|
 | `last_sync` | ISO timestamp of the last successful poll. Use this in alerts to detect stalled sync. |
 
+### Stalled-sync alert (recommended)
+
+Drop [`examples/automations/last_sync_stale.yaml`](examples/automations/last_sync_stale.yaml) into your automations to get a persistent notification + phone push when `last_sync` falls behind by more than an hour. This is the soak-monitor: if Amazon invalidates your cookies, you'll know within an hour instead of finding out next time you check the dashboard.
+
 ## When Amazon kicks you out
 
 Amazon periodically invalidates the unofficial-API sessions `alexapy` uses. When that happens:
@@ -84,7 +88,7 @@ custom_components/alexa_shopping_list_sync/
 
 40 unit tests cover the client (parsing, transport, 401/403/409), the coordinator (auth-failure → `ConfigEntryAuthFailed`, transient errors → `UpdateFailed`, last_sync stamping), the config flow (happy, MFA, captcha, invalid auth, unknown error, duplicate-account abort, reauth), the todo entity (uid stability, all CRUD paths, missing-uid no-ops), and the repair flow. Coverage: **91 %**.
 
-Integration tests (gated by `@pytest.mark.integration`) hit the real Alexa API — set `ALEXA_EMAIL` and `ALEXA_PASSWORD` in the environment and run `make test-int`.
+Integration tests (gated by `@pytest.mark.integration`) hit the real Alexa API. Copy `.env.example` to `.env`, fill in `ALEXA_EMAIL` / `ALEXA_PASSWORD` (and `ALEXA_OTP_SECRET` for TOTP-based 2FA), then `make test-int`. The live test adds a `__hass_test__<uuid>`-tagged item, verifies it round-trips, then deletes it — your real shopping list isn't touched.
 
 ## Known risks
 

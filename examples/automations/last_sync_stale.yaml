@@ -1,0 +1,45 @@
+# Alert when the Alexa Shopping List Sync stops polling successfully.
+#
+# Trigger: last_sync attribute older than 1 hour (4 × the default 15-min poll).
+# Action:  persistent notification + mobile push via HA Companion.
+#
+# Paste into Settings → Automations & Scenes → "+" → Switch to YAML, or drop
+# into your packages/ directory.
+
+alias: "Alexa Shopping List Sync — sync stalled"
+description: >
+  Fires if the Alexa shopping list todo entity hasn't polled successfully in
+  the last hour. Most commonly means Amazon invalidated the session — open
+  Settings → Repairs and walk through the reauth card.
+mode: single
+
+trigger:
+  - platform: template
+    value_template: >
+      {% set last = state_attr('todo.alexa_shopping_list', 'last_sync') %}
+      {% if last %}
+        {{ (now() - as_datetime(last)).total_seconds() > 3600 }}
+      {% else %}
+        false
+      {% endif %}
+    for: "00:05:00"  # debounce: only fire if stale for 5 min straight
+
+action:
+  - service: persistent_notification.create
+    data:
+      title: "Alexa Shopping List Sync stalled"
+      message: >
+        Last sync was {{
+          state_attr('todo.alexa_shopping_list', 'last_sync') or 'never'
+        }}. Check Settings → Repairs.
+      notification_id: alexa_shopping_list_stale
+  # Replace mobile_app_<your_phone> with your HA Companion device name.
+  - service: notify.mobile_app_phone
+    data:
+      title: "Alexa sync stalled"
+      message: >
+        No successful sync since {{
+          state_attr('todo.alexa_shopping_list', 'last_sync') or 'never'
+        }}. Tap to open Repairs.
+      data:
+        url: "/config/repairs"
