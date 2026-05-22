@@ -1,0 +1,21 @@
+{
+  "namedLists": {
+    "lists": [
+      {"itemId": "LIST-1", "type": "SHOPPING_LIST", "name": "Shopping"},
+      {"itemId": "LIST-2", "type": "TO_DO", "name": "ToDo"}
+    ]
+  },
+  "items": {
+    "listItems": [
+      {"id": "item-1", "value": "Milk", "completed": false, "version": 1},
+      {"id": "item-2", "value": "Bread 🍞", "completed": false, "version": 2},
+      {"id": "item-3", "value": "Done thing", "completed": true, "version": 1}
+    ]
+  },
+  "item_added": {
+    "id": "item-new", "value": "Eggs", "completed": false, "version": 1
+  },
+  "item_updated": {
+    "id": "item-1", "value": "Milk", "completed": true, "version": 2
+  }
+}

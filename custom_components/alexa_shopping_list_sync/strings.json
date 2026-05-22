@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Alexa Shopping List Sync",
+        "description": "Sign in to your Amazon account. Use a secondary account for testing if possible.",
+        "data": {
+          "email": "Amazon email",
+          "password": "Amazon password",
+          "url": "Amazon region (e.g. amazon.de, amazon.com)"
+        }
+      },
+      "mfa": {
+        "title": "Two-factor authentication",
+        "description": "Enter the 6-digit code from your authenticator app or SMS.",
+        "data": {
+          "otp_secret": "OTP code"
+        }
+      },
+      "captcha": {
+        "title": "Captcha required",
+        "description": "Amazon is asking for a captcha. Open the image URL below and type what you see.\n\n{captcha_url}",
+        "data": {
+          "captcha": "Captcha answer"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Alexa Shopping List Sync",
+        "description": "Your Amazon session expired. Enter your password to reconnect.",
+        "data": {
+          "password": "Amazon password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Cannot reach Amazon.",
+      "unknown": "Unexpected error. See the logs for details."
+    },
+    "abort": {
+      "already_configured": "This Amazon account is already configured.",
+      "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "issues": {
+    "auth_expired": {
+      "title": "Alexa session expired",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Reconnect Alexa",
+            "description": "Amazon invalidated your session. Click Submit to walk through the reauth flow."
+          }
+        }
+      }
+    }
+  }
+}

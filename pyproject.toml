@@ -1,0 +1,39 @@
+[project]
+name = "alexa-shopping-list-sync"
+version = "0.1.0"
+description = "Home Assistant custom integration that syncs the Amazon Alexa shopping list with the native HA todo entity."
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [{name = "Mathias Uhl"}]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [".dev", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "ASYNC", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: hits real Alexa API; requires ALEXA_EMAIL + ALEXA_PASSWORD env",
+]
+
+[tool.coverage.run]
+source = ["custom_components/alexa_shopping_list_sync"]
+omit = ["*/translations/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

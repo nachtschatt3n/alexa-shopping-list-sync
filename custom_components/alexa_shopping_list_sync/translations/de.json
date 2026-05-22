@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Alexa Einkaufsliste Sync",
+        "description": "Melde dich mit deinem Amazon-Konto an. Nutze zum Testen möglichst ein Zweitkonto.",
+        "data": {
+          "email": "Amazon E-Mail",
+          "password": "Amazon Passwort",
+          "url": "Amazon-Region (z.B. amazon.de, amazon.com)"
+        }
+      },
+      "mfa": {
+        "title": "Zwei-Faktor-Authentifizierung",
+        "description": "Gib den 6-stelligen Code aus deiner Authenticator-App oder SMS ein.",
+        "data": {
+          "otp_secret": "OTP-Code"
+        }
+      },
+      "captcha": {
+        "title": "Captcha erforderlich",
+        "description": "Amazon verlangt ein Captcha. Öffne die URL unten und gib die Antwort ein.\n\n{captcha_url}",
+        "data": {
+          "captcha": "Captcha-Antwort"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Alexa Einkaufsliste Sync erneut anmelden",
+        "description": "Deine Amazon-Sitzung ist abgelaufen. Gib dein Passwort erneut ein.",
+        "data": {
+          "password": "Amazon Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige E-Mail oder Passwort.",
+      "cannot_connect": "Amazon nicht erreichbar.",
+      "unknown": "Unerwarteter Fehler. Details im Log."
+    },
+    "abort": {
+      "already_configured": "Dieses Amazon-Konto ist bereits konfiguriert.",
+      "reauth_successful": "Erneute Anmeldung erfolgreich."
+    }
+  },
+  "issues": {
+    "auth_expired": {
+      "title": "Alexa-Sitzung abgelaufen",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Alexa neu verbinden",
+            "description": "Amazon hat deine Sitzung beendet. Klick auf Senden, um die erneute Anmeldung zu starten."
+          }
+        }
+      }
+    }
+  }
+}

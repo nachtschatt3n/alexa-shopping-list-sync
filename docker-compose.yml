@@ -1,0 +1,11 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.5
+    container_name: alexa-sync-ha-dev
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./.dev/config:/config
+      - ./custom_components/alexa_shopping_list_sync:/config/custom_components/alexa_shopping_list_sync
+    environment:
+      TZ: Europe/Berlin
