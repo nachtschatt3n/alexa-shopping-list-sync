@@ -20,7 +20,21 @@ Built on [`alexapy`](https://pypi.org/project/alexapy/). HACS-installable.
 3. **Settings → Devices & Services → Add Integration → "Alexa Shopping List Sync"**
 4. Enter your Amazon email, password, region (default `amazon.de`)
 
-If 2FA is enabled on your Amazon account you'll be prompted for the OTP. If Amazon presents a captcha you'll see the image URL and a field to type the answer.
+### MFA — what to expect
+
+The config flow branches based on what Amazon asks for on each login attempt:
+
+| Amazon asks for… | Step shown | What you enter |
+|---|---|---|
+| Authenticator-app code (TOTP) | `mfa_app` | Current 6-digit code from your app |
+| SMS / email code | `mfa_sms` | Code Amazon sent you |
+| "Pick a 2FA delivery method" | `claimspicker` | The option number Amazon lists |
+| "Pick an authentication method" | `authselect` | The option number Amazon lists |
+| Captcha | `captcha` | Open the image URL, type what you see |
+
+If you use an **authenticator app**, paste your TOTP shared secret into the optional field on the first screen. The integration then computes codes itself on each login, so you'll never see the MFA step again — including after Amazon expires your cookies. (Get the secret from the QR-code setup screen when you enrolled the authenticator, or re-enroll if you don't have it.)
+
+If you use **SMS / email** 2FA, you'll have to type a fresh code every time Amazon decides to re-challenge you. The Repair flow notification helps catch this fast.
 
 ## Usage
 

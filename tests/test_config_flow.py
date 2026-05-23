@@ -16,9 +16,14 @@ from custom_components.alexa_shopping_list_sync.const import (
 )
 from custom_components.alexa_shopping_list_sync.exceptions import (
     AlexaAuthError,
+    AlexaAuthSelectRequired,
     AlexaCaptchaRequired,
+    AlexaClaimsPickerRequired,
     AlexaMfaRequired,
+    MfaKind,
 )
+
+_OK_STATE = {"cookies": {"sess": "abc"}, "customer_id": "C", "csrf": "x"}
 
 
 async def test_user_flow_happy_path(hass, mock_alexa_client_class):
@@ -36,6 +41,23 @@ async def test_user_flow_happy_path(hass, mock_alexa_client_class):
     assert result["data"][CONF_COOKIES] == {"sess": "abc"}
 
 
+async def test_user_flow_with_otp_secret_persisted(hass, mock_alexa_client_class):
+    """User provides TOTP shared secret upfront → stored on entry, no MFA prompt."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_EMAIL: "u@example.com",
+            "password": "pw",
+            CONF_URL: "amazon.de",
+            CONF_OTP_SECRET: "JBSWY3DPEHPK3PXP",
+        },
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OTP_SECRET] == "JBSWY3DPEHPK3PXP"
+
+
 async def test_user_flow_invalid_auth_shows_error(hass, mock_alexa_client_class):
     mock_alexa_client_class.login = AsyncMock(side_effect=AlexaAuthError("bad"))
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
@@ -47,12 +69,54 @@ async def test_user_flow_invalid_auth_shows_error(hass, mock_alexa_client_class)
     assert result["errors"] == {"base": "invalid_auth"}
 
 
-async def test_user_flow_mfa_branch(hass, mock_alexa_client_class):
-    # First login raises MFA, second succeeds
+async def test_mfa_authenticator_branch_submits_securitycode(hass, mock_alexa_client_class):
+    """Authenticator-app MFA → mfa_app step → posts as `securitycode`."""
+    mock_alexa_client_class.login = AsyncMock(
+        side_effect=[AlexaMfaRequired(MfaKind.AUTHENTICATOR, "Enter code"), _OK_STATE]
+    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_EMAIL: "u@example.com", "password": "pw", CONF_URL: "amazon.de"},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mfa_app"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"code": "123456"})
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    # Second login call should have used securitycode, not verificationcode
+    second_call = mock_alexa_client_class.login.await_args_list[1]
+    assert second_call.kwargs.get("securitycode") == "123456"
+    assert second_call.kwargs.get("verificationcode") is None
+
+
+async def test_mfa_sms_branch_submits_verificationcode(hass, mock_alexa_client_class):
+    """SMS/email MFA → mfa_sms step → posts as `verificationcode`."""
+    mock_alexa_client_class.login = AsyncMock(
+        side_effect=[AlexaMfaRequired(MfaKind.SMS_OR_EMAIL, "SMS sent"), _OK_STATE]
+    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_EMAIL: "u@example.com", "password": "pw", CONF_URL: "amazon.de"},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mfa_sms"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"code": "987654"})
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    second_call = mock_alexa_client_class.login.await_args_list[1]
+    assert second_call.kwargs.get("verificationcode") == "987654"
+    assert second_call.kwargs.get("securitycode") is None
+
+
+async def test_claimspicker_branch(hass, mock_alexa_client_class):
     mock_alexa_client_class.login = AsyncMock(
         side_effect=[
-            AlexaMfaRequired("mfa"),
-            {"cookies": {"sess": "abc"}, "customer_id": "C", "csrf": "x"},
+            AlexaClaimsPickerRequired("1) SMS to ***1234  2) Email"),
+            _OK_STATE,
         ]
     )
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
@@ -61,20 +125,41 @@ async def test_user_flow_mfa_branch(hass, mock_alexa_client_class):
         {CONF_EMAIL: "u@example.com", "password": "pw", CONF_URL: "amazon.de"},
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "mfa"
+    assert result["step_id"] == "claimspicker"
+    assert "SMS" in (result["description_placeholders"] or {}).get("message", "")
 
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_OTP_SECRET: "123456"}
-    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"option": "1"})
     await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    second_call = mock_alexa_client_class.login.await_args_list[1]
+    assert second_call.kwargs.get("claimsoption") == "1"
 
 
-async def test_user_flow_captcha_branch(hass, mock_alexa_client_class):
+async def test_authselect_branch(hass, mock_alexa_client_class):
+    mock_alexa_client_class.login = AsyncMock(
+        side_effect=[AlexaAuthSelectRequired("Pick one"), _OK_STATE]
+    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_EMAIL: "u@example.com", "password": "pw", CONF_URL: "amazon.de"},
+    )
+    assert result["step_id"] == "authselect"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"option": "2"})
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    second_call = mock_alexa_client_class.login.await_args_list[1]
+    assert second_call.kwargs.get("authselectoption") == "2"
+
+
+async def test_captcha_then_mfa_chain(hass, mock_alexa_client_class):
+    """Realistic flow: captcha first, then MFA, then success."""
     mock_alexa_client_class.login = AsyncMock(
         side_effect=[
             AlexaCaptchaRequired("https://example/cap.png"),
-            {"cookies": {"sess": "abc"}, "customer_id": "C", "csrf": "x"},
+            AlexaMfaRequired(MfaKind.AUTHENTICATOR, ""),
+            _OK_STATE,
         ]
     )
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
@@ -82,13 +167,12 @@ async def test_user_flow_captcha_branch(hass, mock_alexa_client_class):
         result["flow_id"],
         {CONF_EMAIL: "u@example.com", "password": "pw", CONF_URL: "amazon.de"},
     )
-    assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "captcha"
-    assert "https://example/cap.png" in (result["description_placeholders"] or {}).get(
-        "captcha_url", ""
-    )
 
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"captcha": "ABCD"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"captcha": "XYZ"})
+    assert result["step_id"] == "mfa_app"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"code": "654321"})
     await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
 

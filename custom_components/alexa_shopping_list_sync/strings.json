@@ -3,18 +3,40 @@
     "step": {
       "user": {
         "title": "Alexa Shopping List Sync",
-        "description": "Sign in to your Amazon account. Use a secondary account for testing if possible.",
+        "description": "Sign in to your Amazon account. Use a secondary account for testing if possible.\n\nIf you use an **authenticator app** for 2FA, paste your TOTP shared secret into the optional field — alexapy will then generate codes automatically and you'll never see an MFA prompt again. If left blank, you'll be prompted for a fresh code on each login.",
         "data": {
           "email": "Amazon email",
           "password": "Amazon password",
-          "url": "Amazon region (e.g. amazon.de, amazon.com)"
+          "url": "Amazon region (e.g. amazon.de, amazon.com)",
+          "otp_secret": "TOTP shared secret (optional)"
         }
       },
-      "mfa": {
-        "title": "Two-factor authentication",
-        "description": "Enter the 6-digit code from your authenticator app or SMS.",
+      "mfa_app": {
+        "title": "Authenticator-app code",
+        "description": "Enter the 6-digit code from your authenticator app.\n\n{message}",
         "data": {
-          "otp_secret": "OTP code"
+          "code": "Authenticator code"
+        }
+      },
+      "mfa_sms": {
+        "title": "SMS / email code",
+        "description": "Amazon sent you a verification code via SMS or email. Enter it below.\n\n{message}",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "claimspicker": {
+        "title": "Pick a 2FA delivery method",
+        "description": "Amazon is asking which method to use to deliver your code. Enter the option (usually a number).\n\n{message}",
+        "data": {
+          "option": "Option"
+        }
+      },
+      "authselect": {
+        "title": "Pick an authentication method",
+        "description": "Amazon is asking you to pick a primary authentication method. Enter the option.\n\n{message}",
+        "data": {
+          "option": "Option"
         }
       },
       "captcha": {

@@ -12,11 +12,14 @@ from typing import Any
 
 from .exceptions import (
     AlexaAuthError,
+    AlexaAuthSelectRequired,
     AlexaCaptchaRequired,
+    AlexaClaimsPickerRequired,
     AlexaConflict,
     AlexaError,
     AlexaListNotFound,
     AlexaMfaRequired,
+    MfaKind,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,10 +47,17 @@ class AlexaItem:
 class AlexaClient:
     """Async wrapper around alexapy.AlexaLogin + the Alexa householdlists endpoints."""
 
-    def __init__(self, url: str, email: str, password: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        email: str,
+        password: str,
+        otp_secret: str | None = None,
+    ) -> None:
         self._url = url
         self._email = email
         self._password = password
+        self._otp_secret = otp_secret or ""
         self._login: Any = None  # alexapy.AlexaLogin
         self._list_id: str | None = None
 
@@ -56,14 +66,22 @@ class AlexaClient:
     async def login(
         self,
         *,
-        otp: str | None = None,
+        securitycode: str | None = None,
+        verificationcode: str | None = None,
+        claimsoption: str | None = None,
+        authselectoption: str | None = None,
         captcha: str | None = None,
         cookies: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Log in to Amazon. Returns the persisted session state.
 
-        Raises AlexaMfaRequired / AlexaCaptchaRequired / AlexaAuthError as
-        appropriate so the config flow can branch.
+        Field names mirror alexapy's data keys exactly. The config flow decides
+        which one to pass based on which `*_required` flag the previous attempt
+        raised.
+
+        If `otp_secret` was provided at construction time, alexapy will generate
+        TOTP codes itself — the caller usually does not need to pass
+        `securitycode` for authenticator-app accounts.
         """
         # Imported lazily so unit tests don't need alexapy on the import path.
         from alexapy import AlexaLogin  # type: ignore[import-not-found]
@@ -75,14 +93,21 @@ class AlexaClient:
                 password=self._password,
                 outputpath=lambda f: f,  # we don't write cookies to disk
                 debug=False,
+                otp_secret=self._otp_secret,
             )
             if cookies:
                 # alexapy accepts cookies via its session jar
                 self._login._cookies = cookies
 
-        data: dict[str, Any] = {}
-        if otp:
-            data["otp"] = otp
+        data: dict[str, str | None] = {}
+        if securitycode:
+            data["securitycode"] = securitycode
+        if verificationcode:
+            data["verificationcode"] = verificationcode
+        if claimsoption:
+            data["claimsoption"] = claimsoption
+        if authselectoption:
+            data["authselectoption"] = authselectoption
         if captcha:
             data["captcha"] = captcha
 
@@ -93,10 +118,19 @@ class AlexaClient:
             raise AlexaAuthError(str(err)) from err
 
         status = dict(self._login.status or {})
-        if status.get("captcha_required"):
+
+        # Order matters: captcha and claimspicker can co-occur with code prompts;
+        # resolve them first so the caller doesn't waste a code on the wrong page.
+        if status.get("captcha_required") or status.get("verification_captcha_required"):
             raise AlexaCaptchaRequired(status.get("captcha_image_url", ""))
-        if status.get("securitycode_required") or status.get("verificationcode_required"):
-            raise AlexaMfaRequired("MFA code required")
+        if status.get("claimspicker_required"):
+            raise AlexaClaimsPickerRequired(status.get("claimspicker_message", ""))
+        if status.get("authselect_required"):
+            raise AlexaAuthSelectRequired(status.get("authselect_message", ""))
+        if status.get("securitycode_required"):
+            raise AlexaMfaRequired(MfaKind.AUTHENTICATOR, status.get("message", ""))
+        if status.get("verificationcode_required"):
+            raise AlexaMfaRequired(MfaKind.SMS_OR_EMAIL, status.get("message", ""))
         if not status.get("login_successful"):
             raise AlexaAuthError(f"Login failed: {status}")
 

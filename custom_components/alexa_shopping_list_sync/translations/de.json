@@ -3,18 +3,40 @@
     "step": {
       "user": {
         "title": "Alexa Einkaufsliste Sync",
-        "description": "Melde dich mit deinem Amazon-Konto an. Nutze zum Testen möglichst ein Zweitkonto.",
+        "description": "Melde dich mit deinem Amazon-Konto an. Nutze zum Testen möglichst ein Zweitkonto.\n\nWenn du eine **Authenticator-App** für 2FA verwendest, kannst du dein TOTP-Secret in das optionale Feld einfügen — alexapy generiert dann die Codes selbst und du wirst nie nach einem MFA-Code gefragt. Bleibt das Feld leer, wirst du bei jedem Login nach einem frischen Code gefragt.",
         "data": {
           "email": "Amazon E-Mail",
           "password": "Amazon Passwort",
-          "url": "Amazon-Region (z.B. amazon.de, amazon.com)"
+          "url": "Amazon-Region (z.B. amazon.de, amazon.com)",
+          "otp_secret": "TOTP-Secret (optional)"
         }
       },
-      "mfa": {
-        "title": "Zwei-Faktor-Authentifizierung",
-        "description": "Gib den 6-stelligen Code aus deiner Authenticator-App oder SMS ein.",
+      "mfa_app": {
+        "title": "Authenticator-App Code",
+        "description": "Gib den 6-stelligen Code aus deiner Authenticator-App ein.\n\n{message}",
         "data": {
-          "otp_secret": "OTP-Code"
+          "code": "Authenticator-Code"
+        }
+      },
+      "mfa_sms": {
+        "title": "SMS / E-Mail Code",
+        "description": "Amazon hat dir einen Verifizierungscode per SMS oder E-Mail geschickt. Gib ihn unten ein.\n\n{message}",
+        "data": {
+          "code": "Verifizierungscode"
+        }
+      },
+      "claimspicker": {
+        "title": "2FA-Versandmethode wählen",
+        "description": "Amazon fragt, über welche Methode der Code geschickt werden soll. Gib die Option ein (meist eine Zahl).\n\n{message}",
+        "data": {
+          "option": "Option"
+        }
+      },
+      "authselect": {
+        "title": "Authentifizierungsmethode wählen",
+        "description": "Amazon fragt nach einer primären Authentifizierungsmethode. Gib die Option ein.\n\n{message}",
+        "data": {
+          "option": "Option"
         }
       },
       "captcha": {
