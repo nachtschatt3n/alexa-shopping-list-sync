@@ -10,6 +10,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from alexapy import AlexaLogin  # type: ignore[import-not-found]
+
 from .exceptions import (
     AlexaAuthError,
     AlexaAuthSelectRequired,
@@ -83,9 +85,6 @@ class AlexaClient:
         TOTP codes itself — the caller usually does not need to pass
         `securitycode` for authenticator-app accounts.
         """
-        # Imported lazily so unit tests don't need alexapy on the import path.
-        from alexapy import AlexaLogin  # type: ignore[import-not-found]
-
         if self._login is None:
             self._login = AlexaLogin(
                 url=self._url,
