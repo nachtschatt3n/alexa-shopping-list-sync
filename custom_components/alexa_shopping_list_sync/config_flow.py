@@ -52,14 +52,37 @@ def _normalize_otp_secret(raw: str) -> str:
 _LOGGER = logging.getLogger(__name__)
 
 
-USER_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_EMAIL): str,
-        vol.Required(CONF_PASSWORD): str,
-        vol.Optional(CONF_URL, default=DEFAULT_URL): str,
-        vol.Optional(CONF_OTP_SECRET, default=""): str,
-    }
-)
+def _user_schema(
+    *,
+    email: str = "",
+    url: str = DEFAULT_URL,
+    otp_secret: str = "",
+) -> vol.Schema:
+    """Build the user-step schema, pre-filling fields the user already typed.
+
+    Note: password is intentionally never pre-filled — HA's UI masks it and
+    leaking masked values across re-renders is bad practice.
+    """
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_EMAIL,
+                description={"suggested_value": email} if email else None,
+            ): str,
+            vol.Required(CONF_PASSWORD): str,
+            vol.Optional(CONF_URL, default=url): str,
+            vol.Optional(
+                CONF_OTP_SECRET,
+                description={"suggested_value": otp_secret} if otp_secret else None,
+                default="",
+            ): str,
+        }
+    )
+
+
+# Default schema for the very first render; subsequent renders use _user_schema()
+# with the prior input as suggested defaults.
+USER_SCHEMA = _user_schema()
 
 
 class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -90,7 +113,7 @@ class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
 
             if self._otp_secret and not set(self._otp_secret).issubset(_BASE32_ALPHABET):
                 errors[CONF_OTP_SECRET] = "invalid_otp_secret"
-                return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
+                return self._show_user_step(errors)
 
             await self.async_set_unique_id(f"{self._email}@{self._url}".lower())
             if not self._reauth_id:
@@ -98,9 +121,17 @@ class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
 
             return await self._try_login(errors)
 
+        return self._show_user_step(errors)
+
+    def _show_user_step(self, errors: dict[str, str]) -> ConfigFlowResult:
+        """Re-render the user step, pre-filling fields with what the user already typed."""
         return self.async_show_form(
             step_id="user",
-            data_schema=USER_SCHEMA,
+            data_schema=_user_schema(
+                email=self._email or "",
+                url=self._url or DEFAULT_URL,
+                otp_secret=self._otp_secret or "",
+            ),
             errors=errors,
         )
 
@@ -239,7 +270,7 @@ class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
             # The login object is now in a half-initialized state; drop it so
             # the next attempt rebuilds with the corrected secret.
             self._client = None
-            return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
+            return self._show_user_step(errors)
         except AlexaAuthError as err:
             _LOGGER.debug("Auth failed: %s", err)
             errors["base"] = "invalid_auth"
@@ -249,11 +280,11 @@ class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
                     data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
                     errors=errors,
                 )
-            return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
+            return self._show_user_step(errors)
         except Exception:
             _LOGGER.exception("Unexpected login error")
             errors["base"] = "unknown"
-            return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
+            return self._show_user_step(errors)
 
         data = {
             CONF_EMAIL: self._email,

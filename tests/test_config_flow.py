@@ -227,11 +227,17 @@ async def test_invalid_otp_secret_at_form_level(hass, mock_alexa_client_class):
             CONF_EMAIL: "u@example.com",
             "password": "pw",
             CONF_URL: "amazon.de",
-            CONF_OTP_SECRET: "INVALID-0189",  # 0,1,8,9 not in base32
+            CONF_OTP_SECRET: "INVALID01",  # 0,1 not in base32
         },
     )
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {CONF_OTP_SECRET: "invalid_otp_secret"}
+    # Email and url should be pre-filled on re-render; password should not be.
+    schema_keys = {
+        (m.schema if hasattr(m, "schema") else m): m for m in result["data_schema"].schema
+    }
+    email_marker = schema_keys["email"]
+    assert (email_marker.description or {}).get("suggested_value") == "u@example.com"
 
 
 async def test_invalid_otp_secret_from_alexapy(hass, mock_alexa_client_class):

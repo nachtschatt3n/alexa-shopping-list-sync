@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Alexa Einkaufsliste Sync",
-        "description": "Melde dich mit deinem Amazon-Konto an. Nutze zum Testen möglichst ein Zweitkonto.\n\nWenn du eine **Authenticator-App** für 2FA verwendest, kannst du dein TOTP-Secret in das optionale Feld einfügen — alexapy generiert dann die Codes selbst und du wirst nie nach einem MFA-Code gefragt. Bleibt das Feld leer, wirst du bei jedem Login nach einem frischen Code gefragt.",
+        "description": "Melde dich mit deinem Amazon-Konto an. Nutze zum Testen möglichst ein Zweitkonto.\n\n**Zum TOTP-Feld**: das ist das lange **Shared Secret** (Base32, z.B. `JBSWY3DPEHPK3PXP`), das du beim Einrichten der Authenticator-App vom QR-Code bekommen hast — NICHT der wechselnde 6-stellige Code. Wenn du es hast, einfügen und du wirst nie wieder nach einem MFA-Code gefragt. Wenn nicht, **leer lassen** — der nächste Schritt fragt nach dem aktuellen 6-stelligen Code aus deiner App.",
         "data": {
           "email": "Amazon E-Mail",
           "password": "Amazon Passwort",
           "url": "Amazon-Region (z.B. amazon.de, amazon.com)",
-          "otp_secret": "TOTP-Secret (optional)"
+          "otp_secret": "TOTP Shared Secret — Base32-String, NICHT der 6-stellige Code (leer lassen, um den Code bei jedem Login einzugeben)"
         }
       },
       "mfa_app": {

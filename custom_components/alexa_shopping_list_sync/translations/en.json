@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Alexa Shopping List Sync",
-        "description": "Sign in to your Amazon account. Use a secondary account for testing if possible.\n\nIf you use an **authenticator app** for 2FA, paste your TOTP shared secret into the optional field — alexapy will then generate codes automatically and you'll never see an MFA prompt again. If left blank, you'll be prompted for a fresh code on each login.",
+        "description": "Sign in to your Amazon account. Use a secondary account for testing if possible.\n\n**About the TOTP field**: this is the long **shared secret** (base32, like `JBSWY3DPEHPK3PXP`) you got from the QR-code setup screen when you enrolled the authenticator — NOT the rotating 6-digit code. If you have it, paste it and you'll never see an MFA prompt again. If you don't, **leave it blank** — the next step will ask you for the current 6-digit code from your app.",
         "data": {
           "email": "Amazon email",
           "password": "Amazon password",
           "url": "Amazon region (e.g. amazon.de, amazon.com)",
-          "otp_secret": "TOTP shared secret (optional)"
+          "otp_secret": "TOTP shared secret — base32 string, NOT the 6-digit code (leave blank to enter the code each login)"
         }
       },
       "mfa_app": {
