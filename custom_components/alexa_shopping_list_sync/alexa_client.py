@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from alexapy import AlexaLogin  # type: ignore[import-not-found]
+from alexapy.errors import AlexapyPyotpInvalidKey  # type: ignore[import-not-found]
 
 from .exceptions import (
     AlexaAuthError,
@@ -19,6 +20,7 @@ from .exceptions import (
     AlexaClaimsPickerRequired,
     AlexaConflict,
     AlexaError,
+    AlexaInvalidOtpSecret,
     AlexaListNotFound,
     AlexaMfaRequired,
     MfaKind,
@@ -86,14 +88,19 @@ class AlexaClient:
         `securitycode` for authenticator-app accounts.
         """
         if self._login is None:
-            self._login = AlexaLogin(
-                url=self._url,
-                email=self._email,
-                password=self._password,
-                outputpath=lambda f: f,  # we don't write cookies to disk
-                debug=False,
-                otp_secret=self._otp_secret,
-            )
+            try:
+                self._login = AlexaLogin(
+                    url=self._url,
+                    email=self._email,
+                    password=self._password,
+                    outputpath=lambda f: f,  # we don't write cookies to disk
+                    debug=False,
+                    otp_secret=self._otp_secret,
+                )
+            except AlexapyPyotpInvalidKey as err:
+                raise AlexaInvalidOtpSecret(
+                    "TOTP secret is not valid base32 (allowed: A-Z, 2-7)"
+                ) from err
             if cookies:
                 # alexapy accepts cookies via its session jar
                 self._login._cookies = cookies

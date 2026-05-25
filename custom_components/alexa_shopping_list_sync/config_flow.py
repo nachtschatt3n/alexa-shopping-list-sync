@@ -24,9 +24,30 @@ from .exceptions import (
     AlexaAuthSelectRequired,
     AlexaCaptchaRequired,
     AlexaClaimsPickerRequired,
+    AlexaInvalidOtpSecret,
     AlexaMfaRequired,
     MfaKind,
 )
+
+_BASE32_ALPHABET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+
+
+def _normalize_otp_secret(raw: str) -> str:
+    """Strip whitespace/hyphens, uppercase. Empty string if blank.
+
+    Does NOT validate base32 — alexapy will raise if it can't decode. We
+    just clean up the common paste mistakes (spaces, hyphens, lowercase,
+    an `otpauth://` URL prefix).
+    """
+    if not raw:
+        return ""
+    s = raw.strip()
+    if s.startswith("otpauth://") and "secret=" in s:
+        # otpauth://totp/Issuer:user?secret=XYZ&issuer=...
+        s = s.split("secret=", 1)[1].split("&", 1)[0]
+    s = s.replace(" ", "").replace("-", "").upper()
+    return s
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +86,11 @@ class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
             self._email = user_input[CONF_EMAIL]
             self._password = user_input[CONF_PASSWORD]
             self._url = user_input.get(CONF_URL, DEFAULT_URL)
-            self._otp_secret = (user_input.get(CONF_OTP_SECRET) or "").strip()
+            self._otp_secret = _normalize_otp_secret(user_input.get(CONF_OTP_SECRET) or "")
+
+            if self._otp_secret and not set(self._otp_secret).issubset(_BASE32_ALPHABET):
+                errors[CONF_OTP_SECRET] = "invalid_otp_secret"
+                return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
 
             await self.async_set_unique_id(f"{self._email}@{self._url}".lower())
             if not self._reauth_id:
@@ -208,6 +233,13 @@ class AlexaShoppingListConfigFlow(ConfigFlow, domain=DOMAIN):
             if err.kind == MfaKind.SMS_OR_EMAIL:
                 return await self.async_step_mfa_sms()
             return await self.async_step_mfa_app()
+        except AlexaInvalidOtpSecret as err:
+            _LOGGER.debug("Invalid OTP secret: %s", err)
+            errors[CONF_OTP_SECRET] = "invalid_otp_secret"
+            # The login object is now in a half-initialized state; drop it so
+            # the next attempt rebuilds with the corrected secret.
+            self._client = None
+            return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
         except AlexaAuthError as err:
             _LOGGER.debug("Auth failed: %s", err)
             errors["base"] = "invalid_auth"

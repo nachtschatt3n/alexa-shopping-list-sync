@@ -71,3 +71,12 @@ class AlexaListNotFound(AlexaError):
 
 class AlexaConflict(AlexaError):
     """Raised on 409 optimistic-lock failure (item version mismatch)."""
+
+
+class AlexaInvalidOtpSecret(AlexaError):
+    """Raised when the TOTP shared secret is not valid base32.
+
+    Valid TOTP secrets are uppercase A-Z and digits 2-7 (RFC 3548 base32).
+    Common mistakes: pasting an `otpauth://` URL, including hyphens or
+    spaces, including `0`/`1`/`8`/`9`.
+    """

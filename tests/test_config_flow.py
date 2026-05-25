@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.alexa_shopping_list_sync.config_flow import _normalize_otp_secret
 from custom_components.alexa_shopping_list_sync.const import (
     CONF_COOKIES,
     CONF_EMAIL,
@@ -19,6 +20,7 @@ from custom_components.alexa_shopping_list_sync.exceptions import (
     AlexaAuthSelectRequired,
     AlexaCaptchaRequired,
     AlexaClaimsPickerRequired,
+    AlexaInvalidOtpSecret,
     AlexaMfaRequired,
     MfaKind,
 )
@@ -203,6 +205,50 @@ async def test_duplicate_account_aborts(hass, mock_alexa_client_class):
     )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+def test_normalize_otp_secret_strips_spaces_and_hyphens():
+    assert _normalize_otp_secret("  abcd efgh ") == "ABCDEFGH"
+    assert _normalize_otp_secret("ABCD-EFGH-IJKL") == "ABCDEFGHIJKL"
+    assert _normalize_otp_secret("") == ""
+
+
+def test_normalize_otp_secret_extracts_from_otpauth_url():
+    url = "otpauth://totp/Amazon:user@x.com?secret=JBSWY3DPEHPK3PXP&issuer=Amazon"
+    assert _normalize_otp_secret(url) == "JBSWY3DPEHPK3PXP"
+
+
+async def test_invalid_otp_secret_at_form_level(hass, mock_alexa_client_class):
+    """Client-side validation rejects non-base32 chars BEFORE hitting alexapy."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_EMAIL: "u@example.com",
+            "password": "pw",
+            CONF_URL: "amazon.de",
+            CONF_OTP_SECRET: "INVALID-0189",  # 0,1,8,9 not in base32
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {CONF_OTP_SECRET: "invalid_otp_secret"}
+
+
+async def test_invalid_otp_secret_from_alexapy(hass, mock_alexa_client_class):
+    """If validation passes but alexapy still rejects (edge case), error path is the same."""
+    mock_alexa_client_class.login = AsyncMock(side_effect=AlexaInvalidOtpSecret("bad"))
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_EMAIL: "u@example.com",
+            "password": "pw",
+            CONF_URL: "amazon.de",
+            CONF_OTP_SECRET: "JBSWY3DPEHPK3PXP",
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {CONF_OTP_SECRET: "invalid_otp_secret"}
 
 
 async def test_reauth_flow_succeeds(hass, mock_alexa_client_class):
