@@ -1,5 +1,21 @@
 # Alexa Shopping List Sync
 
+> [!WARNING]
+> **This integration is OBSOLETE — do not install for new setups.**
+>
+> When this repo was started, the only way to get the Alexa shopping list into HA was via the unofficial `alexapy` library, which is increasingly broken on amazon.de due to Amazon's anti-bot defenses. That has changed: HA's **`alexa_devices`** core integration (powered by `aioamazondevices`) now has a To-do platform in flight:
+>
+> - HA core PR: <https://github.com/home-assistant/core/pull/171136>
+> - `aioamazondevices` PR: <https://github.com/chemelli74/aioamazondevices/pull/839>
+>
+> Once these merge, you just enable the **Alexa Devices** integration (Settings → Devices & Services) and `todo.<account>` entities appear. The official integration uses Amazon's iOS-app pairing flow — handles MFA properly, no captcha games, no cookie hacks.
+>
+> Want it before the PRs land? See [`docs/cherry-pick.md`](docs/cherry-pick.md) for the exact steps used to run them on a live HA today, including a tiny patch around the missing HTTP/2 push wiring in PR #171136.
+>
+> The code below is preserved for reference and as a fallback if the official path ever stops working.
+
+---
+
 A Home Assistant custom integration that bidirectionally syncs the Amazon Alexa shopping list with HA's native `todo` entity.
 
 Built on [`alexapy`](https://pypi.org/project/alexapy/). HACS-installable.

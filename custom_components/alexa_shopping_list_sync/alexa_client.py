@@ -12,6 +12,7 @@ from typing import Any
 
 from alexapy import AlexaLogin  # type: ignore[import-not-found]
 from alexapy.errors import AlexapyPyotpInvalidKey  # type: ignore[import-not-found]
+from bs4 import BeautifulSoup
 
 from .exceptions import (
     AlexaAuthError,
@@ -27,6 +28,41 @@ from .exceptions import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------- alexapy patch
+#
+# alexapy 1.29.x bug on amazon.de pages that present BOTH <form name="register">
+# and <form name="signIn">: its _process_page does `form_tag = soup.find("form")`
+# which returns the FIRST form (the registration one), so the next POST goes to
+# /ap/register and Amazon silently treats the attempt as a new-account signup —
+# the page comes back unchanged forever and login can't converge.
+#
+# get_inputs() correctly picks signIn for the input fields, so the only thing
+# wrong is the POST URL. We wrap _process_page: if it returns /ap/register AND
+# the page has a signIn form, swap both URL and data dict to that form.
+
+_orig_process_page = AlexaLogin._process_page
+
+
+async def _patched_process_page(self, html: str, site: str):  # type: ignore[no-untyped-def]
+    result = await _orig_process_page(self, html, site)
+    if not result or "/ap/register" not in str(result):
+        return result
+    soup = BeautifulSoup(html, "html.parser")
+    signin_form = soup.find("form", {"name": "signIn"})
+    if not signin_form or not signin_form.get("action"):
+        return result
+    _LOGGER.debug(
+        "Patching alexapy: redirecting POST from %s to signIn form action %s",
+        result,
+        signin_form["action"],
+    )
+    self._data = self.get_inputs(soup, {"name": "signIn"})
+    return signin_form["action"]
+
+
+AlexaLogin._process_page = _patched_process_page  # type: ignore[method-assign]
+# --------------------------------------------------------- end alexapy patch
 
 
 @dataclass(slots=True, frozen=True)
@@ -117,28 +153,53 @@ class AlexaClient:
         if captcha:
             data["captcha"] = captcha
 
-        try:
-            await self._login.login(data=data)
-        except Exception as err:
-            _LOGGER.debug("alexapy.login raised: %s", err)
-            raise AlexaAuthError(str(err)) from err
+        # alexapy.login() does ONE round trip (GET → POST → process), then
+        # returns. Amazon's modern flow is multi-page (email → password → MFA),
+        # so we loop until alexapy either (a) sets `login_successful`,
+        # (b) raises one of the *_required status flags (caller must respond),
+        # (c) reports a hard error, or (d) we hit a max-iterations safety bound.
+        #
+        # Pass `data` only on the FIRST iteration (where the caller may have
+        # given us a code/captcha to submit); subsequent iterations are alexapy
+        # walking the multi-page flow on its own.
+        max_iterations = 8
+        first = True
+        for _ in range(max_iterations):
+            try:
+                await self._login.login(data=data if first else {})
+            except Exception as err:
+                _LOGGER.debug("alexapy.login raised: %s", err)
+                raise AlexaAuthError(str(err)) from err
+            first = False
 
-        status = dict(self._login.status or {})
+            status = dict(self._login.status or {})
 
-        # Order matters: captcha and claimspicker can co-occur with code prompts;
-        # resolve them first so the caller doesn't waste a code on the wrong page.
-        if status.get("captcha_required") or status.get("verification_captcha_required"):
-            raise AlexaCaptchaRequired(status.get("captcha_image_url", ""))
-        if status.get("claimspicker_required"):
-            raise AlexaClaimsPickerRequired(status.get("claimspicker_message", ""))
-        if status.get("authselect_required"):
-            raise AlexaAuthSelectRequired(status.get("authselect_message", ""))
-        if status.get("securitycode_required"):
-            raise AlexaMfaRequired(MfaKind.AUTHENTICATOR, status.get("message", ""))
-        if status.get("verificationcode_required"):
-            raise AlexaMfaRequired(MfaKind.SMS_OR_EMAIL, status.get("message", ""))
-        if not status.get("login_successful"):
-            raise AlexaAuthError(f"Login failed: {status}")
+            # Order matters: captcha and claimspicker can co-occur with code
+            # prompts; resolve them first so the caller doesn't waste a code on
+            # the wrong page.
+            if status.get("captcha_required") or status.get("verification_captcha_required"):
+                raise AlexaCaptchaRequired(status.get("captcha_image_url", ""))
+            if status.get("claimspicker_required"):
+                raise AlexaClaimsPickerRequired(status.get("claimspicker_message", ""))
+            if status.get("authselect_required"):
+                raise AlexaAuthSelectRequired(status.get("authselect_message", ""))
+            if status.get("securitycode_required"):
+                raise AlexaMfaRequired(MfaKind.AUTHENTICATOR, status.get("message", ""))
+            if status.get("verificationcode_required"):
+                raise AlexaMfaRequired(MfaKind.SMS_OR_EMAIL, status.get("message", ""))
+            if status.get("login_failed") or status.get("ap_error"):
+                raise AlexaAuthError(status.get("error_message") or f"Login failed: {status}")
+            if status.get("login_successful"):
+                break
+
+            # No success, no error, no prompt — alexapy advanced one page in
+            # the multi-step flow and is waiting for the next GET/POST. Loop.
+            _LOGGER.debug("alexapy login still in progress, status=%s — continuing", status)
+        else:
+            raise AlexaAuthError(
+                f"Login did not converge after {max_iterations} iterations; "
+                f"last status={dict(self._login.status or {})}"
+            )
 
         return {
             "cookies": dict(self._login._cookies or {}),
